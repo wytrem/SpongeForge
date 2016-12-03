@@ -115,6 +115,11 @@ public class SpongeCoremod implements IFMLLoadingPlugin {
         Launch.classLoader.addTransformerExclusion("org.spongepowered.mod.interfaces.IMixinEvent");
 
         SpongeLaunch.setupSuperClassTransformer();
+
+        if (Boolean.parseBoolean(System.getProperty("sponge.debugTransform"))) {
+            Launch.classLoader.addTransformerExclusion("org.spongepowered.mod.asm.transformer.adapter.NukeModifiersTransformer");
+            Launch.classLoader.registerTransformer("org.spongepowered.mod.asm.transformer.adapter.NukeModifiersTransformer");
+        }
     }
 
     private boolean isProductionEnvironment() {
@@ -137,7 +142,7 @@ public class SpongeCoremod implements IFMLLoadingPlugin {
     @Override
     public String[] getASMTransformerClass() {
         return new String[] {
-                SpongeLaunch.SUPERCLASS_TRANSFORMER
+                SpongeLaunch.SUPERCLASS_TRANSFORMER,
         };
     }
 
