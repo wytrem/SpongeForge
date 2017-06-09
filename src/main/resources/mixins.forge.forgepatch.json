@@ -1,0 +1,16 @@
+{
+  "minVersion": "0.5.7",
+  "package": "org.spongepowered.mod.mixin.forgepatch",
+  "plugin": "org.spongepowered.mod.mixin.plugin.forgepatch.ForgePatchPlugin",
+  "refmap": "mixins.forge.refmap.json",
+  "target": "@env(PREINIT)",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "MixinLoader",
+    "MixinFMLModContainer",
+    "MixinSpongeModPluginContainer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
