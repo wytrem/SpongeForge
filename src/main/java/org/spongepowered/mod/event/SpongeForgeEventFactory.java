@@ -28,6 +28,7 @@ import com.flowpowered.math.vector.Vector3d;
 import com.google.common.collect.ImmutableList;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
@@ -78,6 +79,7 @@ import net.minecraftforge.fml.common.eventhandler.EventBus;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerRespawnEvent;
+import org.spongepowered.api.Game;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockSnapshot;
 import org.spongepowered.api.block.BlockState;
@@ -87,6 +89,8 @@ import org.spongepowered.api.data.Transaction;
 import org.spongepowered.api.entity.living.Living;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
+import org.spongepowered.api.event.Cancellable;
+import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.Event;
 import org.spongepowered.api.event.SpongeEventFactory;
 import org.spongepowered.api.event.action.SleepingEvent;
@@ -123,6 +127,7 @@ import org.spongepowered.api.event.world.UnloadWorldEvent;
 import org.spongepowered.api.event.world.chunk.LoadChunkEvent;
 import org.spongepowered.api.event.world.chunk.TargetChunkEvent;
 import org.spongepowered.api.event.world.chunk.UnloadChunkEvent;
+import org.spongepowered.api.item.inventory.ItemStackSnapshot;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.channel.MessageChannel;
 import org.spongepowered.api.util.Direction;
@@ -144,6 +149,8 @@ import org.spongepowered.common.interfaces.entity.IMixinEntityLivingBase;
 import org.spongepowered.common.interfaces.world.IMixinLocation;
 import org.spongepowered.common.interfaces.world.IMixinWorld;
 import org.spongepowered.common.interfaces.world.gen.IMixinChunkProviderServer;
+import org.spongepowered.common.item.inventory.util.InventoryUtil;
+import org.spongepowered.common.item.inventory.util.ItemStackUtil;
 import org.spongepowered.common.registry.provider.DirectionFacingProvider;
 import org.spongepowered.common.text.SpongeTexts;
 import org.spongepowered.common.util.VecHelper;
@@ -229,6 +236,18 @@ public class SpongeForgeEventFactory {
         if (UnloadChunkEvent.class.isAssignableFrom(clazz)) {
             return ChunkEvent.Unload.class;
         }
+        if (UseItemStackEvent.Start.class.isAssignableFrom(clazz)) {
+            return LivingEntityUseItemEvent.Start.class;
+        }
+        if (UseItemStackEvent.Tick.class.isAssignableFrom(clazz)) {
+            return LivingEntityUseItemEvent.Tick.class;
+        }
+        if (UseItemStackEvent.Stop.class.isAssignableFrom(clazz)) {
+            return LivingEntityUseItemEvent.Stop.class;
+        }
+        if (UseItemStackEvent.Finish.class.isAssignableFrom(clazz)) {
+            return LivingEntityUseItemEvent.Finish.class;
+        }
         return null;
     }
 
@@ -271,7 +290,51 @@ public class SpongeForgeEventFactory {
         if (forgeEvent instanceof ChunkEvent.Unload) {
             return createUnloadChunkEvent((ChunkEvent.Unload) forgeEvent);
         }
+        if (forgeEvent instanceof LivingEntityUseItemEvent) {
+            return createUseItemStackEvent((LivingEntityUseItemEvent) forgeEvent);
+        }
         return null;
+    }
+
+    private static Event createUseItemStackEvent(LivingEntityUseItemEvent forgeEvent) {
+
+        final Entity entity = forgeEvent.getEntity();
+
+        if (((IMixinWorld) entity.world).isFake()) {
+            return null;
+        }
+
+        final CauseStackManager manager = Sponge.getCauseStackManager();
+        final ItemStackSnapshot snapshot = ItemStackUtil.fromNative(forgeEvent.getItem()).createSnapshot();
+        manager.pushCause(entity);
+
+        final Cause cause = manager.getCurrentCause();
+
+        UseItemStackEvent event = null;
+
+        // TODO Forge doesn't support reset so that will need to be figured out
+        if (forgeEvent instanceof LivingEntityUseItemEvent.Start) {
+            event = SpongeEventFactory.createUseItemStackEventStart(cause, forgeEvent.getDuration(), forgeEvent.getDuration(),
+                    snapshot);
+        } else if (forgeEvent instanceof LivingEntityUseItemEvent.Tick) {
+            event = SpongeEventFactory.createUseItemStackEventTick(cause, forgeEvent.getDuration(), forgeEvent.getDuration(),
+                    snapshot);
+        } else if (forgeEvent instanceof LivingEntityUseItemEvent.Stop) {
+            event = SpongeEventFactory.createUseItemStackEventStop(cause, forgeEvent.getDuration(), forgeEvent.getDuration(),
+                    snapshot);
+        } else if (forgeEvent instanceof LivingEntityUseItemEvent.Finish) {
+            final ItemStackSnapshot resultSnapshot = ItemStackUtil.fromNative(((LivingEntityUseItemEvent.Finish) forgeEvent).getResultStack())
+                    .createSnapshot();
+            if (snapshot.equals(resultSnapshot)) {
+                event = SpongeEventFactory.createUseItemStackEventFinish(cause, forgeEvent.getDuration(), forgeEvent.getDuration(),
+                        snapshot);
+            } else {
+                event = SpongeEventFactory.createUseItemStackEventReplace(cause, forgeEvent.getDuration(), forgeEvent.getDuration(),
+                        snapshot, new Transaction<>(resultSnapshot, resultSnapshot));
+            }
+        }
+
+        return event;
     }
 
     public static ChangeBlockEvent.Pre createChangeBlockEventPre(BlockEvent.BreakEvent forgeEvent) {
@@ -296,12 +359,14 @@ public class SpongeForgeEventFactory {
 
         if (owner != null) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
-            if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+            // TODO Current cause is never null...if it is, it is Cause.of(Game) which is bogus. @gabizou?
+            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
                 Sponge.getCauseStackManager().pushCause(owner);
             }
         } else {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
-            if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+            // TODO Current cause is never null...if it is, it is Cause.of(Game) which is bogus. @gabizou?
+            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
                 Sponge.getCauseStackManager().pushCause(player);
             }
         }
@@ -335,18 +400,19 @@ public class SpongeForgeEventFactory {
 
         if (SpongeImplHooks.isFakePlayer(player)) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
-        } else if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+            // TODO Current cause is never null...if it is, it is Cause.of(Game) which is bogus. @gabizou?
+        } else if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
             Sponge.getCauseStackManager().pushCause(player);
         }
 
         if (owner != null) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
-            if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
                 Sponge.getCauseStackManager().pushCause(owner);
             }
         } else {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
-            if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
                 Sponge.getCauseStackManager().pushCause(player);
             }
         }
@@ -379,18 +445,18 @@ public class SpongeForgeEventFactory {
 
         if (SpongeImplHooks.isFakePlayer(player)) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
-        } else if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+        } else if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
             Sponge.getCauseStackManager().pushCause(player);
         }
 
         if (owner != null) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
-            if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
                 Sponge.getCauseStackManager().pushCause(owner);
             }
         } else {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
-            if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
                 Sponge.getCauseStackManager().pushCause(player);
             }
         }
@@ -425,18 +491,18 @@ public class SpongeForgeEventFactory {
 
         if (SpongeImplHooks.isFakePlayer(player)) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
-        } else if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+        } else if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
             Sponge.getCauseStackManager().pushCause(player);
         }
 
         if (owner != null) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
-            if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
                 Sponge.getCauseStackManager().pushCause(owner);
             }
         } else {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
-            if (Sponge.getCauseStackManager().getCurrentCause() == null) {
+            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
                 Sponge.getCauseStackManager().pushCause(player);
             }
         }
@@ -540,7 +606,46 @@ public class SpongeForgeEventFactory {
             return callChunkLoadEvent(spongeEvent);
         } else if (ChunkEvent.Unload.class.isAssignableFrom(clazz)) {
             return callChunkUnloadEvent(spongeEvent);
+        } else if (LivingEntityUseItemEvent.class.isAssignableFrom(clazz)) {
+            return callLivingUseItemEvent((UseItemStackEvent) spongeEvent);
         }
+        return spongeEvent;
+    }
+
+    private static Event callLivingUseItemEvent(UseItemStackEvent spongeEvent) {
+
+        final EntityLivingBase entity = spongeEvent.getCause().first(EntityLivingBase.class).orElse(null);
+        if (entity == null) {
+            return null;
+        }
+
+        final ItemStack stack = ItemStackUtil.toNative(spongeEvent.getItemStackInUse().createStack());
+
+        LivingEntityUseItemEvent event = null;
+
+        if (spongeEvent instanceof UseItemStackEvent.Start) {
+            event = new LivingEntityUseItemEvent.Start(entity, stack, spongeEvent.getRemainingDuration());
+        } else if (spongeEvent instanceof UseItemStackEvent.Tick) {
+            event = new LivingEntityUseItemEvent.Tick(entity, stack, spongeEvent.getRemainingDuration());
+        } else if (spongeEvent instanceof UseItemStackEvent.Stop) {
+            event = new LivingEntityUseItemEvent.Stop(entity, stack, spongeEvent.getRemainingDuration());
+        } else if (spongeEvent instanceof UseItemStackEvent.Finish) {
+            event = new LivingEntityUseItemEvent.Finish(entity, stack, spongeEvent.getRemainingDuration(), stack);
+        } else if (spongeEvent instanceof UseItemStackEvent.Replace) {
+            event = new LivingEntityUseItemEvent.Finish(entity, stack, spongeEvent.getRemainingDuration(), ItemStackUtil.toNative((
+                    (UseItemStackEvent.Replace) spongeEvent).getItemStackResult().getFinal().createStack()));
+        }
+
+        if (event == null) {
+            return spongeEvent;
+        }
+
+        ((IMixinEventBus) MinecraftForge.EVENT_BUS).post(event, true);
+
+        if (event.isCanceled()) {
+            ((Cancellable) spongeEvent).setCancelled(true);
+        }
+
         return spongeEvent;
     }
 
