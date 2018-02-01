@@ -49,18 +49,24 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.common.SpongeImplHooks;
 import org.spongepowered.common.entity.player.ISpongeUser;
+import org.spongepowered.common.interfaces.entity.player.IMixinEntityPlayer;
+import org.spongepowered.common.interfaces.world.IMixinWorld;
 import org.spongepowered.common.util.VecHelper;
 import org.spongepowered.mod.mixin.core.entity.living.MixinEntityLivingBase;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+
+import javax.annotation.Nullable;
+
 import java.util.Optional;
 import java.util.UUID;
 
 @Mixin(value = EntityPlayer.class, priority = 1001)
-public abstract class MixinEntityPlayer extends MixinEntityLivingBase implements ISpongeUser {
+public abstract class MixinEntityPlayer extends MixinEntityLivingBase implements ISpongeUser, IMixinEntityPlayer {
 
     @Shadow public InventoryPlayer inventory;
     @Shadow public BlockPos bedLocation;
@@ -108,6 +114,11 @@ public abstract class MixinEntityPlayer extends MixinEntityLivingBase implements
         }
     }
 
+    @Override
+    public void setOverworldSpawnPoint(@Nullable BlockPos pos) {
+        this.spawnPos = pos;
+    }
+
     /**
      * @author JBYoshi - November 23rd, 2015
      * @reason implement SpongeAPI events.
@@ -133,7 +144,7 @@ public abstract class MixinEntityPlayer extends MixinEntityLivingBase implements
         }
 
         SleepingEvent.Post post = null;
-        if (!this.world.isRemote) {
+        if (!((IMixinWorld) this.world).isFake()) {
             try (final CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
                 Sponge.getCauseStackManager().pushCause(this);
                 post = SpongeEventFactory.createSleepingEventPost(Sponge.getCauseStackManager().getCurrentCause(),
