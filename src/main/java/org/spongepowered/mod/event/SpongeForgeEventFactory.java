@@ -79,14 +79,12 @@ import net.minecraftforge.fml.common.eventhandler.EventBus;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerRespawnEvent;
-import org.spongepowered.api.Game;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockSnapshot;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.block.tileentity.TileEntity;
 import org.spongepowered.api.data.Transaction;
-import org.spongepowered.api.entity.living.Living;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.Cancellable;
@@ -364,14 +362,12 @@ public class SpongeForgeEventFactory {
 
         if (owner != null) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
-            // TODO Current cause is never null...if it is, it is Cause.of(Game) which is bogus. @gabizou?
-            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+            if (!Sponge.getCauseStackManager().getCurrentCause().contains(owner)) {
                 Sponge.getCauseStackManager().pushCause(owner);
             }
         } else {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
-            // TODO Current cause is never null...if it is, it is Cause.of(Game) which is bogus. @gabizou?
-            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+            if (!Sponge.getCauseStackManager().getCurrentCause().contains(player)) {
                 Sponge.getCauseStackManager().pushCause(player);
             }
         }
@@ -405,19 +401,18 @@ public class SpongeForgeEventFactory {
 
         if (SpongeImplHooks.isFakePlayer(player)) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
-            // TODO Current cause is never null...if it is, it is Cause.of(Game) which is bogus. @gabizou?
-        } else if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+        } else if (!Sponge.getCauseStackManager().getCurrentCause().contains(player)) {
             Sponge.getCauseStackManager().pushCause(player);
         }
 
         if (owner != null) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
-            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+            if (!Sponge.getCauseStackManager().getCurrentCause().contains(owner)) {
                 Sponge.getCauseStackManager().pushCause(owner);
             }
         } else {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
-            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+            if (!Sponge.getCauseStackManager().getCurrentCause().contains(player)) {
                 Sponge.getCauseStackManager().pushCause(player);
             }
         }
@@ -450,18 +445,18 @@ public class SpongeForgeEventFactory {
 
         if (SpongeImplHooks.isFakePlayer(player)) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
-        } else if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+        } else if (!Sponge.getCauseStackManager().getCurrentCause().contains(player)) {
             Sponge.getCauseStackManager().pushCause(player);
         }
 
         if (owner != null) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
-            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+            if (!Sponge.getCauseStackManager().getCurrentCause().contains(owner)) {
                 Sponge.getCauseStackManager().pushCause(owner);
             }
         } else {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
-            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+            if (!Sponge.getCauseStackManager().getCurrentCause().contains(player)) {
                 Sponge.getCauseStackManager().pushCause(player);
             }
         }
@@ -496,18 +491,18 @@ public class SpongeForgeEventFactory {
 
         if (SpongeImplHooks.isFakePlayer(player)) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
-        } else if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+        } else if (!Sponge.getCauseStackManager().getCurrentCause().contains(player)) {
             Sponge.getCauseStackManager().pushCause(player);
         }
 
         if (owner != null) {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
-            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+            if (!Sponge.getCauseStackManager().getCurrentCause().contains(owner)) {
                 Sponge.getCauseStackManager().pushCause(owner);
             }
         } else {
             Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
-            if (Sponge.getCauseStackManager().getCurrentCause().root() instanceof Game) {
+            if (!Sponge.getCauseStackManager().getCurrentCause().contains(player)) {
                 Sponge.getCauseStackManager().pushCause(player);
             }
         }
@@ -780,56 +775,6 @@ public class SpongeForgeEventFactory {
         Location<World> location = spongeEvent.getBed().getLocation().get();
         BlockPos pos = new BlockPos(location.getBlockX(), location.getBlockY(), location.getBlockZ());
         return new PlayerSleepInBedEvent((EntityPlayer) player.get(), pos);
-    }
-
-    public static LivingEntityUseItemEvent.Start createPlayerUseItemStartEvent(Event event) {
-        UseItemStackEvent.Start spongeEvent = (UseItemStackEvent.Start) event;
-        Optional<Living> living = spongeEvent.getCause().first(Living.class);
-        if (!living.isPresent()) {
-            return null;
-        }
-
-        net.minecraft.item.ItemStack itemstack = (net.minecraft.item.ItemStack) (Object) spongeEvent.getItemStackInUse().createStack();
-        LivingEntityUseItemEvent.Start forgeEvent =
-                new LivingEntityUseItemEvent.Start((EntityLivingBase) living.get(), itemstack, spongeEvent.getRemainingDuration());
-        return forgeEvent;
-    }
-
-    public static LivingEntityUseItemEvent.Tick createPlayerUseItemTickEvent(Event event) {
-        UseItemStackEvent.Tick spongeEvent = (UseItemStackEvent.Tick) event;
-        Optional<Living> living = spongeEvent.getCause().first(Living.class);
-        if (!living.isPresent()) {
-            return null;
-        }
-
-        net.minecraft.item.ItemStack itemstack = (net.minecraft.item.ItemStack) (Object) spongeEvent.getItemStackInUse().createStack();
-        LivingEntityUseItemEvent.Tick forgeEvent = new LivingEntityUseItemEvent.Tick((EntityLivingBase) living.get(), itemstack, spongeEvent.getRemainingDuration());
-        return forgeEvent;
-    }
-
-    public static LivingEntityUseItemEvent.Stop createPlayerUseItemStopEvent(Event event) {
-        UseItemStackEvent.Stop spongeEvent = (UseItemStackEvent.Stop) event;
-        Optional<Living> living = spongeEvent.getCause().first(Living.class);
-        if (!living.isPresent()) {
-            return null;
-        }
-
-        net.minecraft.item.ItemStack itemstack = (net.minecraft.item.ItemStack) (Object) spongeEvent.getItemStackInUse().createStack();
-        LivingEntityUseItemEvent.Stop forgeEvent = new LivingEntityUseItemEvent.Stop((EntityLivingBase) living.get(), itemstack, spongeEvent.getRemainingDuration());
-        return forgeEvent;
-    }
-
-    public static LivingEntityUseItemEvent.Finish createPlayerUseItemFinishEvent(Event event) {
-        UseItemStackEvent.Finish spongeEvent = (UseItemStackEvent.Finish) event;
-        Optional<Living> living = spongeEvent.getCause().first(Living.class);
-        if (!living.isPresent()) {
-            return null;
-        }
-
-        net.minecraft.item.ItemStack itemstack = (net.minecraft.item.ItemStack) (Object) spongeEvent.getItemStackInUse().createStack();
-        LivingEntityUseItemEvent.Finish forgeEvent =
-                new LivingEntityUseItemEvent.Finish((EntityLivingBase) living.get(), itemstack, spongeEvent.getRemainingDuration(), itemstack); // TODO Forge allows changing the itemstack mid tick...
-        return forgeEvent;
     }
 
     // Item events
