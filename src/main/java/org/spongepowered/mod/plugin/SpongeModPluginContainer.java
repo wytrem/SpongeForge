@@ -50,9 +50,11 @@ import net.minecraftforge.fml.common.versioning.DefaultArtifactVersion;
 import net.minecraftforge.fml.common.versioning.VersionParser;
 import net.minecraftforge.fml.common.versioning.VersionRange;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.plugin.PluginConstructor;
 import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.common.SpongeImpl;
 import org.spongepowered.common.inject.plugin.PluginModule;
+import org.spongepowered.common.plugin.GuicePluginConstructor;
 import org.spongepowered.common.plugin.PluginContainerExtension;
 
 import java.io.File;
@@ -69,6 +71,7 @@ import java.util.Set;
 // PluginContainer is implemented indirectly through the mixin to ModContainer
 public class SpongeModPluginContainer implements ModContainer, PluginContainerExtension {
 
+    private static final PluginConstructor GUICE_PLUGIN_CONSTRUCTOR = new GuicePluginConstructor();
     // This is the implementation (SpongeForge) injector.
     @Inject private static Injector spongeInjector;
     private final String id;
@@ -281,7 +284,8 @@ public class SpongeModPluginContainer implements ModContainer, PluginContainerEx
 
             Injector injector = spongeInjector.getParent().createChildInjector(new PluginModule((PluginContainer) this, pluginClazz));
             this.injector = injector;
-            this.instance = injector.getInstance(pluginClazz);
+            final PluginConstructor constructor = this.resolveConstructor();
+            this.instance = constructor.construct(modClassLoader, pluginClazz, (PluginContainer) this, injector);
 
             // TODO: Detect Scala or use meta to know if we're scala and use proper adapter here...
             ProxyInjector.inject(this, event.getASMHarvestedData(), FMLCommonHandler.instance().getSide(), new ILanguageAdapter.JavaAdapter());
@@ -290,6 +294,14 @@ public class SpongeModPluginContainer implements ModContainer, PluginContainerEx
         } catch (Throwable t) {
             this.controller.errorOccurred(this, t);
         }
+    }
+
+    private PluginConstructor resolveConstructor() throws Throwable {
+        final Class<? extends PluginConstructor> constructorClass = ((Class<? extends PluginConstructor>) this.descriptor.get("constructor"));
+        if (constructorClass == PluginConstructor.class) {
+            return GUICE_PLUGIN_CONSTRUCTOR;
+        }
+        return constructorClass.newInstance();
     }
 
     @Override
