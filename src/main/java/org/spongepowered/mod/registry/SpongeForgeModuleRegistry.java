@@ -29,6 +29,7 @@ import org.spongepowered.api.data.property.block.MatterProperty;
 import org.spongepowered.api.data.property.block.SolidCubeProperty;
 import org.spongepowered.api.extra.fluid.data.manipulator.immutable.ImmutableFluidTankData;
 import org.spongepowered.api.extra.fluid.data.manipulator.mutable.FluidTankData;
+import org.spongepowered.api.extra.fluid.data.property.TankMaxCapacityProperty;
 import org.spongepowered.common.SpongeImpl;
 import org.spongepowered.common.data.manipulator.immutable.extra.ImmutableSpongeFluidTankData;
 import org.spongepowered.common.data.manipulator.mutable.extra.SpongeFluidTankData;
@@ -40,6 +41,7 @@ import org.spongepowered.mod.data.ForgeFluidTankDataProcessor;
 import org.spongepowered.mod.data.ForgeLightEmissionPropertyStore;
 import org.spongepowered.mod.data.ForgeMatterPropertyStore;
 import org.spongepowered.mod.data.ForgeSolidCubePropertyStore;
+import org.spongepowered.mod.data.TankMaxCapacityPropertyStore;
 import org.spongepowered.mod.util.StaticMixinForgeHelper;
 
 public class SpongeForgeModuleRegistry {
@@ -51,6 +53,7 @@ public class SpongeForgeModuleRegistry {
         propertyRegistry.register(LightEmissionProperty.class, new ForgeLightEmissionPropertyStore());
         propertyRegistry.register(MatterProperty.class, new ForgeMatterPropertyStore());
         propertyRegistry.register(SolidCubeProperty.class, new ForgeSolidCubePropertyStore());
+        propertyRegistry.register(TankMaxCapacityProperty.class, new TankMaxCapacityPropertyStore());
 
         // Data registration
 
