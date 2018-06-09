@@ -42,9 +42,7 @@ import org.spongepowered.api.data.key.Key;
 import org.spongepowered.api.data.manipulator.DataManipulator;
 import org.spongepowered.api.data.merge.MergeFunction;
 import org.spongepowered.api.data.persistence.InvalidDataException;
-import org.spongepowered.api.data.value.BaseValue;
-import org.spongepowered.api.data.value.immutable.ImmutableValue;
-import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.extra.fluid.FluidStackSnapshot;
 import org.spongepowered.api.extra.fluid.FluidType;
 import org.spongepowered.asm.mixin.Mixin;
@@ -101,8 +99,8 @@ public class MixinFluidStack implements org.spongepowered.api.extra.fluid.FluidS
     }
 
     @Override
-    public <E> DataTransactionResult offer(Key<? extends BaseValue<E>> key, E value) {
-        final Optional<ValueProcessor<E, ? extends BaseValue<E>>> optional = DataUtil.getBaseValueProcessor(key);
+    public <E> DataTransactionResult offer(Key<? extends Value<E>> key, E value) {
+        final Optional<ValueProcessor<E, ? extends Value<E>>> optional = DataUtil.getBaseValueProcessor(key);
         if (optional.isPresent()) {
             return optional.get().offerToStore(this, value);
         } else if (this instanceof IMixinCustomDataHolder) {
@@ -179,10 +177,10 @@ public class MixinFluidStack implements org.spongepowered.api.extra.fluid.FluidS
             return DataTransactionResult.successNoData();
         }
         final DataTransactionResult.Builder builder = DataTransactionResult.builder();
-        for (ImmutableValue<?> replaced : result.getReplacedData()) {
+        for (Value.Immutable<?> replaced : result.getReplacedData()) {
             builder.absorbResult(offer(replaced));
         }
-        for (ImmutableValue<?> successful : result.getSuccessfulData()) {
+        for (Value.Immutable<?> successful : result.getSuccessfulData()) {
             builder.absorbResult(remove(successful));
         }
         return builder.build();
@@ -199,8 +197,8 @@ public class MixinFluidStack implements org.spongepowered.api.extra.fluid.FluidS
     }
 
     @Override
-    public <E> Optional<E> get(Key<? extends BaseValue<E>> key) {
-        final Optional<ValueProcessor<E, ? extends BaseValue<E>>> optional = DataUtil.getBaseValueProcessor(checkNotNull(key));
+    public <E> Optional<E> get(Key<? extends Value<E>> key) {
+        final Optional<ValueProcessor<E, ? extends Value<E>>> optional = DataUtil.getBaseValueProcessor(checkNotNull(key));
         if (optional.isPresent()) {
             return optional.get().getValueFromContainer(this);
         }
@@ -208,7 +206,7 @@ public class MixinFluidStack implements org.spongepowered.api.extra.fluid.FluidS
     }
 
     @Override
-    public <E, V extends BaseValue<E>> Optional<V> getValue(Key<V> key) {
+    public <E, V extends Value<E>> Optional<V> getValue(Key<V> key) {
         final Optional<ValueProcessor<E, V>> optional = DataUtil.getValueProcessor(checkNotNull(key));
         if (optional.isPresent()) {
             return optional.get().getApiValueFromContainer(this);
@@ -234,7 +232,7 @@ public class MixinFluidStack implements org.spongepowered.api.extra.fluid.FluidS
     }
 
     @Override
-    public Set<ImmutableValue<?>> getValues() {
+    public Set<Value.Immutable<?>> getValues() {
         return ImmutableSet.of();
     }
 

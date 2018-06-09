@@ -32,9 +32,9 @@ import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import org.spongepowered.api.data.DataTransactionResult;
 import org.spongepowered.api.data.key.Keys;
+import org.spongepowered.api.data.value.MapValue;
+import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.data.value.ValueContainer;
-import org.spongepowered.api.data.value.immutable.ImmutableValue;
-import org.spongepowered.api.data.value.mutable.MapValue;
 import org.spongepowered.api.extra.fluid.FluidStack;
 import org.spongepowered.api.extra.fluid.FluidStackSnapshot;
 import org.spongepowered.api.extra.fluid.data.manipulator.immutable.ImmutableFluidTankData;
@@ -43,7 +43,7 @@ import org.spongepowered.api.util.Direction;
 import org.spongepowered.common.data.manipulator.mutable.extra.SpongeFluidTankData;
 import org.spongepowered.common.data.processor.common.AbstractSingleDataSingleTargetProcessor;
 import org.spongepowered.common.data.value.immutable.ImmutableSpongeMapValue;
-import org.spongepowered.common.data.value.mutable.SpongeMapValue;
+import org.spongepowered.common.data.value.mutable.SpongeMutableMapValue;
 import org.spongepowered.common.registry.provider.DirectionFacingProvider;
 
 import java.util.HashMap;
@@ -52,7 +52,7 @@ import java.util.Map;
 import java.util.Optional;
 
 public class ForgeFluidTankDataProcessor extends AbstractSingleDataSingleTargetProcessor<TileEntity, Map<Direction, List<FluidStackSnapshot>>,
-        MapValue<Direction, List<FluidStackSnapshot>>, FluidTankData, ImmutableFluidTankData> {
+    MapValue.Mutable<Direction, List<FluidStackSnapshot>>, FluidTankData, ImmutableFluidTankData> {
 
     public ForgeFluidTankDataProcessor() {
         super(Keys.FLUID_TANK_CONTENTS, TileEntity.class);
@@ -117,13 +117,13 @@ public class ForgeFluidTankDataProcessor extends AbstractSingleDataSingleTargetP
     }
 
     @Override
-    protected ImmutableValue<Map<Direction, List<FluidStackSnapshot>>> constructImmutableValue(Map<Direction, List<FluidStackSnapshot>> value) {
+    protected Value.Immutable<Map<Direction, List<FluidStackSnapshot>>> constructImmutableValue(Map<Direction, List<FluidStackSnapshot>> value) {
         return new ImmutableSpongeMapValue<>(Keys.FLUID_TANK_CONTENTS, value);
     }
 
     @Override
-    protected MapValue<Direction, List<FluidStackSnapshot>> constructValue(Map<Direction, List<FluidStackSnapshot>> actualValue) {
-        return new SpongeMapValue<>(Keys.FLUID_TANK_CONTENTS, actualValue);
+    protected MapValue.Mutable<Direction, List<FluidStackSnapshot>> constructValue(Map<Direction, List<FluidStackSnapshot>> actualValue) {
+        return new SpongeMutableMapValue<>(Keys.FLUID_TANK_CONTENTS, actualValue);
     }
 
     @Override
