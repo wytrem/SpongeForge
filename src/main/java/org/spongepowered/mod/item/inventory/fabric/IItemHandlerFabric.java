@@ -42,6 +42,11 @@ public class IItemHandlerFabric implements Fabric {
     }
 
     @Override
+    public Class getType() {
+        return IItemHandler.class;
+    }
+
+    @Override
     public Collection<?> allInventories() {
         return ImmutableSet.of(this.inventory);
     }
