@@ -39,6 +39,7 @@ import net.minecraftforge.fml.common.eventhandler.IEventExceptionHandler;
 import net.minecraftforge.fml.common.eventhandler.IEventListener;
 import net.minecraftforge.fml.common.eventhandler.ListenerList;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.util.annotation.NonnullByDefault;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -128,53 +129,55 @@ public abstract class MixinEventBus implements IMixinEventBus {
     @Override
     public boolean post(Event event, boolean forced) {
         org.spongepowered.api.event.Event spongeEvent = null;
+        // Make a frame here so it's unwound.
+        try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
+            final IEventListener[] listeners = event.getListenerList().getListeners(this.busID);
+            ForgeEventData forgeEventData = null;
+            if (!forced) {
+                if (!isEventAllowed(event)) {
+                    return false;
+                }
 
-        final IEventListener[] listeners = event.getListenerList().getListeners(this.busID);
-        ForgeEventData forgeEventData = null;
-        if (!forced) {
-            if (!isEventAllowed(event)) {
-                return false;
+                forgeEventData = new ForgeEventData(event, listeners, this.isClientPlatform());
+                spongeEvent = SpongeForgeEventFactory.createOrPostSpongeEvent(forgeEventData);
             }
 
-            forgeEventData = new ForgeEventData(event, listeners, this.isClientPlatform());
-            spongeEvent = SpongeForgeEventFactory.createOrPostSpongeEvent(forgeEventData);
-        }
+            if (!forced && spongeEvent != null && !this.isClientPlatform()) {
+                final RegisteredListener.Cache listenerCache = ((SpongeModEventManager) Sponge.getEventManager()).getHandlerCache(spongeEvent);
+                forgeEventData.setSpongeEvent(spongeEvent);
+                forgeEventData.setSpongeListenerCache(listenerCache);
+                return ((SpongeModEventManager) SpongeImpl.getGame().getEventManager()).post(forgeEventData);
+            }
 
-        if (!forced && spongeEvent != null && !this.isClientPlatform()) {
-            final RegisteredListener.Cache listenerCache = ((SpongeModEventManager) Sponge.getEventManager()).getHandlerCache(spongeEvent);
-            forgeEventData.setSpongeEvent(spongeEvent);
-            forgeEventData.setSpongeListenerCache(listenerCache);
-            return ((SpongeModEventManager) SpongeImpl.getGame().getEventManager()).post(forgeEventData);
-        }
-
-        int index = 0;
-        IMixinASMEventHandler modListener = null;
-        try {
-            for (; index < listeners.length; index++) {
-                final IEventListener listener = listeners[index];
-                if (listener instanceof IMixinASMEventHandler) {
-                    modListener = (IMixinASMEventHandler) listener;
-                    modListener.getTimingsHandler().startTimingIfSync();
-                    try (PhaseContext<?> context = SpongeForgeEventHooks.preEventPhaseCheck(listener, event)) {
-                        if (context != null) {
-                            context.buildAndSwitch();
+            int index = 0;
+            IMixinASMEventHandler modListener = null;
+            try {
+                for (; index < listeners.length; index++) {
+                    final IEventListener listener = listeners[index];
+                    if (listener instanceof IMixinASMEventHandler) {
+                        modListener = (IMixinASMEventHandler) listener;
+                        modListener.getTimingsHandler().startTimingIfSync();
+                        try (PhaseContext<?> context = SpongeForgeEventHooks.preEventPhaseCheck(listener, event)) {
+                            if (context != null) {
+                                context.buildAndSwitch();
+                            }
+                            listener.invoke(event);
                         }
+                        modListener.getTimingsHandler().stopTimingIfSync();
+                    } else {
                         listener.invoke(event);
                     }
-                    modListener.getTimingsHandler().stopTimingIfSync();
-                } else {
-                    listener.invoke(event);
                 }
+            } catch (Throwable throwable) {
+                if (modListener != null) {
+                    modListener.getTimingsHandler().stopTimingIfSync();
+                }
+                this.exceptionHandler.handleException((EventBus) (Object) this, event, listeners, index, throwable);
+                Throwables.throwIfUnchecked(throwable);
+                throw new RuntimeException(throwable);
             }
-        } catch (Throwable throwable) {
-            if (modListener != null) {
-                modListener.getTimingsHandler().stopTimingIfSync();
-            }
-            this.exceptionHandler.handleException((EventBus) (Object) this, event, listeners, index, throwable);
-            Throwables.throwIfUnchecked(throwable);
-            throw new RuntimeException(throwable);
+            return (event.isCancelable() ? event.isCanceled() : false);
         }
-        return (event.isCancelable() ? event.isCanceled() : false);
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })

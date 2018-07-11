@@ -77,7 +77,6 @@ import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.event.Cancellable;
-import org.spongepowered.api.event.CauseStackManager;
 import org.spongepowered.api.event.Event;
 import org.spongepowered.api.event.SpongeEventFactory;
 import org.spongepowered.api.event.action.FishingEvent;
@@ -134,6 +133,7 @@ import org.spongepowered.common.interfaces.world.gen.IMixinChunkProviderServer;
 import org.spongepowered.common.item.inventory.util.ItemStackUtil;
 import org.spongepowered.common.registry.provider.DirectionFacingProvider;
 import org.spongepowered.common.text.SpongeTexts;
+import org.spongepowered.common.util.ServerUtils;
 import org.spongepowered.common.util.VecHelper;
 import org.spongepowered.mod.interfaces.IMixinBlockSnapshot;
 import org.spongepowered.mod.interfaces.IMixinEventBus;
@@ -352,6 +352,7 @@ public class SpongeForgeEventFactory {
             }
 
             final BlockPos pos = forgeEvent.getPos();
+            // TODO - Why is this commented out?
             /*final PhaseTracker phaseTracker = PhaseTracker.getInstance();
             final PhaseData data = phaseTracker.getCurrentPhaseData();
 
@@ -386,43 +387,42 @@ public class SpongeForgeEventFactory {
         final ChangeBlockEvent.Place spongeEvent = (ChangeBlockEvent.Place) eventData.getSpongeEvent();
         final BlockEvent.PlaceEvent forgeEvent = (BlockEvent.PlaceEvent) eventData.getForgeEvent();
         if (spongeEvent == null) {
-            try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
-                final BlockPos pos = forgeEvent.getPos();
-                final net.minecraft.world.World world = forgeEvent.getWorld();
-                if (world.isRemote) {
-                    return null;
-                }
-    
-                final PhaseTracker phaseTracker = PhaseTracker.getInstance();
-                final PhaseData data = phaseTracker.getCurrentPhaseData();
-                BlockSnapshot originalSnapshot = ((IMixinBlockSnapshot) forgeEvent.getBlockSnapshot()).createSpongeBlockSnapshot();
-                BlockSnapshot
-                    finalSnapshot =
-                    ((BlockState) forgeEvent.getPlacedBlock()).snapshotFor(new Location<>((World) world, VecHelper.toVector3d(pos)));
-                ImmutableList<Transaction<BlockSnapshot>> blockSnapshots = new ImmutableList.Builder<Transaction<BlockSnapshot>>().add(
-                    new Transaction<>(originalSnapshot, finalSnapshot)).build();
-    
-                User owner = data.context.getOwner().orElse(null);
-                User notifier = data.context.getNotifier().orElse(null);
-                EntityPlayer player = forgeEvent.getPlayer();
-    
-                if (SpongeImplHooks.isFakePlayer(player)) {
-                    frame.addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
-                }
-    
-                if (owner != null) {
-                    frame.addContext(EventContextKeys.OWNER, owner);
-                } else {
-                    frame.addContext(EventContextKeys.OWNER, (User) player);
-                }
-                if (notifier != null) {
-                    frame.addContext(EventContextKeys.NOTIFIER, notifier);
-                }
-    
-                frame.addContext(EventContextKeys.PLAYER_PLACE, (World) world);
-    
-                return SpongeEventFactory.createChangeBlockEventPlace(frame.getCurrentCause(), blockSnapshots);
+            final BlockPos pos = forgeEvent.getPos();
+            final net.minecraft.world.World world = forgeEvent.getWorld();
+            if (world.isRemote) {
+                return null;
             }
+
+            final PhaseTracker phaseTracker = PhaseTracker.getInstance();
+            final PhaseData data = phaseTracker.getCurrentPhaseData();
+            BlockSnapshot originalSnapshot = ((IMixinBlockSnapshot) forgeEvent.getBlockSnapshot()).createSpongeBlockSnapshot();
+            BlockSnapshot
+                finalSnapshot =
+                ((BlockState) forgeEvent.getPlacedBlock()).snapshotFor(new Location<>((World) world, VecHelper.toVector3d(pos)));
+            ImmutableList<Transaction<BlockSnapshot>> blockSnapshots = new ImmutableList.Builder<Transaction<BlockSnapshot>>().add(
+                new Transaction<>(originalSnapshot, finalSnapshot)).build();
+
+            User owner = data.context.getOwner().orElse(null);
+            User notifier = data.context.getNotifier().orElse(null);
+            EntityPlayer player = forgeEvent.getPlayer();
+
+            if (SpongeImplHooks.isFakePlayer(player)) {
+                Sponge.getCauseStackManager().addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
+            }
+
+            if (owner != null) {
+                Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
+            } else {
+                Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
+            }
+            if (notifier != null) {
+                Sponge.getCauseStackManager().addContext(EventContextKeys.NOTIFIER, notifier);
+            }
+
+            Sponge.getCauseStackManager().addContext(EventContextKeys.PLAYER_PLACE, (World) world);
+
+            return SpongeEventFactory.createChangeBlockEventPlace(Sponge.getCauseStackManager().getCurrentCause(), blockSnapshots);
+
         }
 
         ((SpongeModEventManager) Sponge.getEventManager()).postEvent(eventData);
@@ -433,41 +433,40 @@ public class SpongeForgeEventFactory {
         final ChangeBlockEvent.Place spongeEvent = (ChangeBlockEvent.Place) eventData.getSpongeEvent();
         final BlockEvent.MultiPlaceEvent forgeEvent = (BlockEvent.MultiPlaceEvent) eventData.getForgeEvent();
         if (spongeEvent == null) {
-            try (CauseStackManager.StackFrame frame = Sponge.getCauseStackManager().pushCauseFrame()) {
-                final net.minecraft.world.World world = forgeEvent.getWorld();
-                if (world.isRemote) {
-                    return null;
-                }
-    
-                ImmutableList.Builder<Transaction<BlockSnapshot>> builder = new ImmutableList.Builder<>();
-                for (net.minecraftforge.common.util.BlockSnapshot blockSnapshot : forgeEvent.getReplacedBlockSnapshots()) {
-                    final BlockPos snapshotPos = blockSnapshot.getPos();
-                    BlockSnapshot originalSnapshot = ((IMixinBlockSnapshot) blockSnapshot).createSpongeBlockSnapshot();
-                    BlockSnapshot finalSnapshot = ((World) world).createSnapshot(snapshotPos.getX(), snapshotPos.getY(), snapshotPos.getZ());
-                    builder.add(new Transaction<>(originalSnapshot, finalSnapshot));
-                }
-    
-                final PhaseTracker phaseTracker = PhaseTracker.getInstance();
-                final PhaseData data = phaseTracker.getCurrentPhaseData();
-                User owner = data.context.getOwner().orElse(null);
-                User notifier = data.context.getNotifier().orElse(null);
-                EntityPlayer player = forgeEvent.getPlayer();
-    
-                if (SpongeImplHooks.isFakePlayer(player)) {
-                    frame.addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
-                }
-    
-                if (owner != null) {
-                    frame.addContext(EventContextKeys.OWNER, owner);
-                } else {
-                    frame.addContext(EventContextKeys.OWNER, (User) player);
-                }
-                if (notifier != null) {
-                    frame.addContext(EventContextKeys.NOTIFIER, notifier);
-                }
-    
-                return SpongeEventFactory.createChangeBlockEventPlace(frame.getCurrentCause(), builder.build());
+            final net.minecraft.world.World world = forgeEvent.getWorld();
+            if (world.isRemote) {
+                return null;
             }
+
+            ImmutableList.Builder<Transaction<BlockSnapshot>> builder = new ImmutableList.Builder<>();
+            for (net.minecraftforge.common.util.BlockSnapshot blockSnapshot : forgeEvent.getReplacedBlockSnapshots()) {
+                final BlockPos snapshotPos = blockSnapshot.getPos();
+                BlockSnapshot originalSnapshot = ((IMixinBlockSnapshot) blockSnapshot).createSpongeBlockSnapshot();
+                BlockSnapshot finalSnapshot = ((World) world).createSnapshot(snapshotPos.getX(), snapshotPos.getY(), snapshotPos.getZ());
+                builder.add(new Transaction<>(originalSnapshot, finalSnapshot));
+            }
+
+            final PhaseTracker phaseTracker = PhaseTracker.getInstance();
+            final PhaseData data = phaseTracker.getCurrentPhaseData();
+            User owner = data.context.getOwner().orElse(null);
+            User notifier = data.context.getNotifier().orElse(null);
+            EntityPlayer player = forgeEvent.getPlayer();
+
+            if (SpongeImplHooks.isFakePlayer(player)) {
+                Sponge.getCauseStackManager().addContext(EventContextKeys.FAKE_PLAYER, EntityUtil.toPlayer(player));
+            }
+
+            if (owner != null) {
+                Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, owner);
+            } else {
+                Sponge.getCauseStackManager().addContext(EventContextKeys.OWNER, (User) player);
+            }
+            if (notifier != null) {
+                Sponge.getCauseStackManager().addContext(EventContextKeys.NOTIFIER, notifier);
+            }
+
+            return SpongeEventFactory.createChangeBlockEventPlace(Sponge.getCauseStackManager().getCurrentCause(), builder.build());
+
         }
 
         ((SpongeModEventManager) Sponge.getEventManager()).postEvent(eventData);
@@ -548,7 +547,7 @@ public class SpongeForgeEventFactory {
         final UnloadChunkEvent spongeEvent = (UnloadChunkEvent) eventData.getSpongeEvent();
         final ChunkEvent.Unload forgeEvent = (ChunkEvent.Unload) eventData.getForgeEvent();
         if (spongeEvent == null) {
-            final boolean isMainThread = Sponge.isServerAvailable() && Sponge.getServer().isMainThread();
+            final boolean isMainThread = ServerUtils.isCallingFromMainThread();
             if (isMainThread) {
                 Sponge.getCauseStackManager().pushCause(forgeEvent.getWorld());
             }
